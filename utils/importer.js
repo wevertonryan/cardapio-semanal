@@ -1,4 +1,4 @@
-import { BlobReader, ZipReader, TextWriter } from "@zip.js/zip.js";
+import { BlobReader, ZipReader, TextWriter } from "https://cdn.jsdelivr.net/npm/@zip.js/zip.js@2.8.23/+esm";
 
 const url = "https://fdc.nal.usda.gov/fdc-datasets/FoodData_Central_foundation_food_json_2025-12-18.zip"
 async function getFoodDataZip(){
@@ -27,7 +27,6 @@ function contentToArrayFoodValidObj(content){
         const jsonConteudo = JSON.parse(content); // Converte para Objeto
         jsonConteudo.FoundationFoods.forEach(food => {
             const foodValidObj = _foodToValidObj(food);
-            console.log(foodValidObj);
             arrayFoodValidObj.push(foodValidObj);
         });
         return arrayFoodValidObj;
@@ -56,14 +55,13 @@ function _foodToValidObj(food){
     return validFood;
 }
 
-async function main(){
+export default async function importData(){
     try {
         const blob = await getFoodDataZip();
         const content = await descompressFoodDataZip(blob);
         const arrayFoodValidObj = contentToArrayFoodValidObj(content);
+        return arrayFoodValidObj;
     } catch(error) {
         console.log(error.message);
     }
 }
-
-await main();
