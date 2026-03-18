@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { BlobReader, ZipReader, TextWriter } from "@zip.js/zip.js";
-import foods from "./foods.js";
+import foods from "./data/foods.js";
 
-const baseUrl = "https://fdc.nal.usda.gov"
+
 async function getCorrectLink(baseUrl, downloadPath = "download-datasets"){
     try {
         const page = await (await fetch(baseUrl + downloadPath)).text();
@@ -24,10 +24,24 @@ async function getOnlineFoodDataZip(url){
     };
 }
 
-function getLocalFoodData(){
-    const files = readdirSync(".");
-    const fileName = files.find(fileName => /.*?foundation.*?food.*?json.*?.json/.test(fileName));
-    console.log(fileName)
+/*
+ - Olhar arquivos que tem dentro da pasta
+ - procurar 
+*/
+function getCorrectFile(path = "./data/"){
+    let finalFileName;
+    const files = readdirSync(path);
+    const filesName = files.filter(fileName => /.*?foundation.*?food.*?json.*?/.test(fileName));
+
+    finalFileName = filesName.find(fileName => /.*?.json/.test(fileName));
+    if(!finalFileName){
+        finalFileName = filesName.find(fileName => /.*?.zip/.test(fileName));
+    }
+    if(!finalFileName){
+        throw new Error("Não existe nem um arquivo válido para pegar os dados")
+    }
+    
+    return finalFileName;
 }
 
 async function descompressFoodDataZip(zipFileBlob){
@@ -75,20 +89,36 @@ function _foodToValidObj(food){
     return validFood;
 }
 
+// pegar link de maneira automática, Baixar dados online, descompactar e enviar o conteúdo
 async function getOnlineData(){
+    const baseUrl = "https://fdc.nal.usda.gov"
     const link = await getCorrectLink(baseUrl);
     const blob = await getOnlineFoodDataZip(link)
     const content = await descompressFoodDataZip(blob)
     return content;
 }
 
+// pegar os dados locais, se estiver compactado descompactar, ler e enviar o conteúdo
 function getLocalData(){
-    getLocalFoodData();
+    const fileName = getCorrectFile();
+
 }
 
+/* pegar o conteúdo dos arquivos, realizar a conversão para um formato válida
+ - Ver se tem uma versão nova disponível, caso não nem faz
+ - Tenta baixar, caso não consiga aborta operação
+ - Se não existir um foods.js ou foods.json ele vai criar um do zero se tiver o json ou zip
+ - Tirar conteúdo desnecessário
+ - Estruturar de maneira correta
+ - Adicionar imagens automáticamente
+ - Traduzir conteúdo para português
+ - Gravar em um arquivo foods.js preparado para export  
+*/
 async function main(){
     try {
-        getLocalData()
+        const content = await getOnlineData();
+        const foodArrayValidObj = contentToArrayFoodValidObj(content);
+        console.log(foodArrayValidObj[25]);
     } catch(error) {
         console.log(error.message);
     }
