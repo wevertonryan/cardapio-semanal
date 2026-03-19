@@ -72,26 +72,86 @@ const nutrientsId = [1008, 1005, 1004, 1003, 1162, 1106, 1087, 1089, 1090, 1095,
 // colocar nutrients em uma tabela separada
 function _foodToValidObj(food){
     const validFood = {
-        description: food.description,
-        nutrients: []
+        "name": food.description,
+        "nutrients": {}
     };
     food.foodNutrients.forEach(foodNutrient => {
-        if(!nutrientsId.includes(foodNutrient.nutrient.id)) {
-            return;
-        };
+        const name = _nutrientName(foodNutrient.nutrient.id);
+        if(!name) return;
+        const {amount, unitName} = unitConverter(foodNutrient.amount, foodNutrient.nutrient.unitName)
         const validFoodNutrient = {
-            name: foodNutrient.nutrient.name,
-            unitName: foodNutrient.nutrient.unitName,
-            amount: foodNutrient.amount
+            name: name,
+            amount: amount,
+            unitName: unitName
         }
-        validFood.nutrients.push(validFoodNutrient);
+        validFood.nutrients[foodNutrient.nutrient.id] = validFoodNutrient;
     });
     return validFood;
 }
 
+function _nutrientName(id){
+    switch(id){
+            case 1008:
+                return "Energia";
+            case 1003:
+                return "Proteina";
+            case 1005:
+                return "Caboidrato";
+            case 1004:
+                return "Gordura";
+            case 1079:
+                return "Fibra";
+            case 1162:
+                return "Vitamina C";
+            case 1087:
+                return "Cálcio";
+            case 1089:
+                return "Ferro";
+            case 1090:
+                return "Magnésio";
+            case 1095:
+                return "Zinco";
+            case 1092:
+                return "Potásio";
+            case 1109:
+                return "Vitamina E";
+            case 1106:
+                return "Vitamina";
+            default:
+                return;
+        }
+}
+
+function unitConverter(amount, unitInput){
+    switch(unitInput){
+        case "mg":
+        return {amount: amount * 0.001, unitName: "g"}
+        case "μg":
+        return {amount: amount * 0.000001, unitName: "g"}
+        default:
+        return {amount: amount, unitName: unitInput}
+    }
+}
+
+/*
+* 1008 Energy
+* 1003 Protein
+* 1005 Carbohydrate, by difference
+* 1004 Total lipid (fat)
+* 1079 Fiber
+* 1162 Vitamin C
+* 1087 Calcium
+* 1089 Iron
+* 1090 Magnesium
+* 1095 Zinc
+* 1092 Potassium
+* 1106 Vitamin A
+* 1109 Vitamin E
+*/
+
 // pegar link de maneira automática, Baixar dados online, descompactar e enviar o conteúdo
 async function getOnlineData(){
-    const baseUrl = "https://fdc.nal.usda.gov"
+    const baseUrl = "https://fdc.nal.usda.gov/"
     const link = await getCorrectLink(baseUrl);
     const blob = await getOnlineFoodDataZip(link)
     const content = await descompressFoodDataZip(blob)
@@ -101,7 +161,6 @@ async function getOnlineData(){
 // pegar os dados locais, se estiver compactado descompactar, ler e enviar o conteúdo
 function getLocalData(){
     const fileName = getCorrectFile();
-
 }
 
 /* pegar o conteúdo dos arquivos, realizar a conversão para um formato válida
@@ -118,10 +177,12 @@ async function main(){
     try {
         const content = await getOnlineData();
         const foodArrayValidObj = contentToArrayFoodValidObj(content);
-        console.log(foodArrayValidObj[25]);
+        console.log(foodArrayValidObj[1]);
     } catch(error) {
         console.log(error.message);
     }
 }
 
 await main();
+
+//console.log(foods[1])
