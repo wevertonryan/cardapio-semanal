@@ -1,6 +1,7 @@
 {
   "type": "module",
   "dependencies": {
-    "@zip.js/zip.js": "^2.8.23"
+    "@zip.js/zip.js": "^2.8.23",
+    "translatte": "^3.0.1"
   }
 }

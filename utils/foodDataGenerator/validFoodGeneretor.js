@@ -2,6 +2,8 @@ import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { Uint8ArrayReader, BlobReader, ZipReader, TextWriter } from "@zip.js/zip.js";
 //import foods from "./data/foods.js";
 
+
+
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
@@ -176,6 +178,11 @@ function roundTo(num, precision) {
   return Math.round(num * factor) / factor;
 }
 
+async function addImages(foodName){
+    await fetch("https://unsplash.com/s/photos/" + foodName)
+    
+}
+
 // pegar link de maneira automática, Baixar dados online, descompactar e enviar o conteúdo
 async function getOnlineData(){
     const baseUrl = "https://fdc.nal.usda.gov/"
@@ -220,13 +227,12 @@ async function main(){
     try {
         let content;
         try {
-            content = await getOnlineData()
+            content = await getLocalData()
         } catch(error){
             console.log("- Failed to get online data: " + error.message)
             content = await getLocalData();
         }
         console.log("- Sucess getting the data")
-        await getLocalData();
         const foodArrayValidObj = contentToArrayFoodValidObj(content);
         writeFile(foodArrayValidObj);
         console.log("- File genereted with sucess!")
@@ -238,3 +244,5 @@ async function main(){
 await main();
 
 //console.log(foods[1])
+
+//https://www.google.com/search?q=
