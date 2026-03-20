@@ -1,12 +1,19 @@
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
-import { BlobReader, ZipReader, TextWriter } from "@zip.js/zip.js";
-import foods from "./data/foods.js";
+import { Uint8ArrayReader, BlobReader, ZipReader, TextWriter } from "@zip.js/zip.js";
+//import foods from "./data/foods.js";
 
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
+const baseFoundationExp = ".*?foundation.*?food.*?json"
 async function getCorrectLink(baseUrl, downloadPath = "download-datasets"){
     try {
         const page = await (await fetch(baseUrl + downloadPath)).text();
-        const path = page.match(/href="([^"]*?foundation.*?food.*?json[^"]*?)"/)[1];
+        
+        const exp = new RegExp(`href="([^"]${baseFoundationExp}[^"]*?)"`)
+        const path = page.match(exp)[1];
         if(path) return baseUrl + path;
         return null;
     } catch(error) {
@@ -31,22 +38,37 @@ async function getOnlineFoodDataZip(url){
 function getCorrectFile(path = "./data/"){
     let finalFileName;
     const files = readdirSync(path);
-    const filesName = files.filter(fileName => /.*?foundation.*?food.*?json.*?/.test(fileName));
-
-    finalFileName = filesName.find(fileName => /.*?.json/.test(fileName));
-    if(!finalFileName){
-        finalFileName = filesName.find(fileName => /.*?.zip/.test(fileName));
-    }
-    if(!finalFileName){
-        throw new Error("Não existe nem um arquivo válido para pegar os dados")
-    }
     
-    return finalFileName;
+    const expString = baseFoundationExp + ".*?";
+    const exp = new RegExp(expString);
+    const filesName = files.filter(fileName => exp.test(fileName));
+
+    const validFormats = ["json", "zip"];
+    for(let i = 0; i < validFormats.length; i++){
+        const expString = ".*?." + validFormats[i];
+        const exp = new RegExp(expString);
+        finalFileName = filesName.find(fileName => exp.test(fileName));
+        if(finalFileName){
+            return finalFileName;
+        }
+    }
+    throw new Error("Não existe nem um arquivo válido para pegar os dados");
 }
 
-async function descompressFoodDataZip(zipFileBlob){
+function fileFormat(fileName){
+    let format = ""
+    for(let i = fileName.length - 1; i > -1; i--){
+        if(fileName[i] != "."){
+            format = fileName[i] + format;
+            continue;
+        }
+        return format;
+    }
+    return undefined;
+}
+
+async function descompressFoodDataZip(zipFileReader){
     const textWriter = new TextWriter()
-    const zipFileReader = new BlobReader(zipFileBlob);
     const zipReader = new ZipReader(zipFileReader);
     const firstEntry = (await zipReader.getEntries()).shift();
     const content = await firstEntry.getData(textWriter);
@@ -68,7 +90,6 @@ function contentToArrayFoodValidObj(content){
     }
 }
 
-const nutrientsId = [1008, 1005, 1004, 1003, 1162, 1106, 1087, 1089, 1090, 1095, 1092, 1079, 1109];
 // colocar nutrients em uma tabela separada
 function _foodToValidObj(food){
     const validFood = {
@@ -88,6 +109,22 @@ function _foodToValidObj(food){
     });
     return validFood;
 }
+
+/*
+* 1008 Energy
+* 1003 Protein
+* 1005 Carbohydrate, by difference
+* 1004 Total lipid (fat)
+* 1079 Fiber
+* 1162 Vitamin C
+* 1087 Calcium
+* 1089 Iron
+* 1090 Magnesium
+* 1095 Zinc
+* 1092 Potassium
+* 1106 Vitamin A
+* 1109 Vitamin E
+*/
 
 function _nutrientName(id){
     switch(id){
@@ -116,51 +153,56 @@ function _nutrientName(id){
             case 1109:
                 return "Vitamina E";
             case 1106:
-                return "Vitamina";
+                return "Vitamina A";
             default:
                 return;
         }
 }
 
 function unitConverter(amount, unitInput){
+    const ug = String.fromCharCode(181, 103)
     switch(unitInput){
         case "mg":
-        return {amount: amount * 0.001, unitName: "g"}
-        case "μg":
-        return {amount: amount * 0.000001, unitName: "g"}
+        return {amount: roundTo(amount * 0.001, 3), unitName: "g"};
+        case ug:
+        return {amount: roundTo(amount * 0.000001, 3), unitName: "g"}
         default:
         return {amount: amount, unitName: unitInput}
     }
 }
 
-/*
-* 1008 Energy
-* 1003 Protein
-* 1005 Carbohydrate, by difference
-* 1004 Total lipid (fat)
-* 1079 Fiber
-* 1162 Vitamin C
-* 1087 Calcium
-* 1089 Iron
-* 1090 Magnesium
-* 1095 Zinc
-* 1092 Potassium
-* 1106 Vitamin A
-* 1109 Vitamin E
-*/
+function roundTo(num, precision) {
+  const factor = Math.pow(10, precision);
+  return Math.round(num * factor) / factor;
+}
 
 // pegar link de maneira automática, Baixar dados online, descompactar e enviar o conteúdo
 async function getOnlineData(){
     const baseUrl = "https://fdc.nal.usda.gov/"
     const link = await getCorrectLink(baseUrl);
     const blob = await getOnlineFoodDataZip(link)
-    const content = await descompressFoodDataZip(blob)
+    console.log(blob)
+    const blobReader = new BlobReader(blob);
+    console.log(blobReader)
+    const content = await descompressFoodDataZip(blobReader)
     return content;
 }
 
 // pegar os dados locais, se estiver compactado descompactar, ler e enviar o conteúdo
-function getLocalData(){
-    const fileName = getCorrectFile();
+async function getLocalData(){
+    const path = __dirname + "/data/"
+    const fileName = getCorrectFile(path);
+    let content = readFileSync(path + fileName);
+    if(fileFormat(fileName) == "zip"){
+        const bufferReader = new Uint8ArrayReader(content);
+        content = await descompressFoodDataZip(bufferReader);
+    }
+    return content;
+}
+
+function writeFile(foodDataArray){
+    const content = "const foods = " + JSON.stringify(foodDataArray) + "\nexport default foods;";
+    writeFileSync(__dirname + "/data/foods.js", content, "utf-8");
 }
 
 /* pegar o conteúdo dos arquivos, realizar a conversão para um formato válida
@@ -174,12 +216,22 @@ function getLocalData(){
  - Gravar em um arquivo foods.js preparado para export  
 */
 async function main(){
+    console.log("Starting generate a valid food file!");
     try {
-        const content = await getOnlineData();
+        let content;
+        try {
+            content = await getOnlineData()
+        } catch(error){
+            console.log("- Failed to get online data: " + error.message)
+            content = await getLocalData();
+        }
+        console.log("- Sucess getting the data")
+        await getLocalData();
         const foodArrayValidObj = contentToArrayFoodValidObj(content);
-        console.log(foodArrayValidObj[1]);
+        writeFile(foodArrayValidObj);
+        console.log("- File genereted with sucess!")
     } catch(error) {
-        console.log(error.message);
+        console.log("- Failed on opperation, aborting!\n- Message: " + error);
     }
 }
 
