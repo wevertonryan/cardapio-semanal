@@ -1,8 +1,9 @@
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { Uint8ArrayReader, BlobReader, ZipReader, TextWriter } from "@zip.js/zip.js";
+import * as cheerio from "cheerio";
+
+import translations from "./data/translations.js";
 //import foods from "./data/foods.js";
-
-
 
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -78,14 +79,14 @@ async function descompressFoodDataZip(zipFileReader){
     return content;
 }
 
-function contentToArrayFoodValidObj(content){
+async function contentToArrayFoodValidObj(content){
     const arrayFoodValidObj = [];
     try {
         const jsonConteudo = JSON.parse(content); // Converte para Objeto
-        jsonConteudo.FoundationFoods.forEach(food => {
-            const foodValidObj = _foodToValidObj(food);
+        for(const food of jsonConteudo.FoundationFoods){
+            const foodValidObj = await _foodToValidObj(food);
             arrayFoodValidObj.push(foodValidObj);
-        });
+        }
         return arrayFoodValidObj;
     } catch(error) {
         throw error;
@@ -93,11 +94,10 @@ function contentToArrayFoodValidObj(content){
 }
 
 // colocar nutrients em uma tabela separada
-function _foodToValidObj(food){
-    const validFood = {
-        "name": food.description,
-        "nutrients": {}
-    };
+async function _foodToValidObj(food){
+    const name = await traslatedName(food.description);
+    //const image = await getOnlineImage(food.description);
+    const nutrients = {};
     food.foodNutrients.forEach(foodNutrient => {
         const name = _nutrientName(foodNutrient.nutrient.id);
         if(!name) return;
@@ -107,9 +107,36 @@ function _foodToValidObj(food){
             amount: amount,
             unitName: unitName
         }
-        validFood.nutrients[foodNutrient.nutrient.id] = validFoodNutrient;
+        nutrients[foodNutrient.nutrient.id] = validFoodNutrient;
     });
+    const validFood = {
+        "name": name,
+        //"image": image,
+        "nutrients": nutrients
+    };
     return validFood;
+}
+
+async function traslatedName(foodName){
+    let traducao = foodName;
+    try {
+        const traducaoForn = translations[foodName];
+        if(!traducaoForn){
+            throw new Error("tradução não existente!")
+        }
+        traducao = traducaoForn;
+    } catch(error) {
+        await translatte(foodName, { to: 'pt' })
+        .then(res => translations[foodName] = res.text)
+        .catch(err => console.error(err));
+        
+        await new Promise(resolve => {
+            setTimeout(resolve(), 1000)
+        })
+        traducao = translations[foodName]
+    } finally {
+        return traducao;
+    }
 }
 
 /*
@@ -178,9 +205,29 @@ function roundTo(num, precision) {
   return Math.round(num * factor) / factor;
 }
 
-async function addImages(foodName){
-    await fetch("https://unsplash.com/s/photos/" + foodName)
-    
+async function getOnlineImage(foodName){
+    let image = new Blob();
+    try {
+        const response = await fetch("https://api.openverse.org/v1/images/?q=" + _firstFoodName(foodName));
+        const result = await response.json();
+        //console.log(result.results[0])
+        const link = result.results[0].url;
+        
+        const imageContent = await fetch(link)
+        image = await imageContent.text();
+    } catch(error) {
+        console.error("Failed to get an image: " + error.message);
+    } finally {
+        return image;
+    }
+}
+
+function _firstFoodName(foodName){
+    let index = foodName.indexOf(",")
+    if(index == -1) {
+        index = foodName.length
+    };
+    return foodName.slice(0, index)
 }
 
 // pegar link de maneira automática, Baixar dados online, descompactar e enviar o conteúdo
@@ -207,9 +254,9 @@ async function getLocalData(){
     return content;
 }
 
-function writeFile(foodDataArray){
-    const content = "const foods = " + JSON.stringify(foodDataArray) + "\nexport default foods;";
-    writeFileSync(__dirname + "/data/foods.js", content, "utf-8");
+function writeFile(fileName, data){
+    const content = `const ${fileName} = ${JSON.stringify(data)}\nexport default ${fileName};`;
+    writeFileSync(`${__dirname}/data/${fileName}.js`, content, "utf-8");
 }
 
 /* pegar o conteúdo dos arquivos, realizar a conversão para um formato válida
@@ -229,12 +276,13 @@ async function main(){
         try {
             content = await getLocalData()
         } catch(error){
-            console.log("- Failed to get online data: " + error.message)
+            console.log("- Failed to get online data: " + error.message);
             content = await getLocalData();
         }
         console.log("- Sucess getting the data")
-        const foodArrayValidObj = contentToArrayFoodValidObj(content);
-        writeFile(foodArrayValidObj);
+        const foodArrayValidObj = await contentToArrayFoodValidObj(content);
+        writeFile("foods", foodArrayValidObj);
+        writeFile("translations", translations);
         console.log("- File genereted with sucess!")
     } catch(error) {
         console.log("- Failed on opperation, aborting!\n- Message: " + error);
@@ -243,6 +291,4 @@ async function main(){
 
 await main();
 
-//console.log(foods[1])
-
-//https://www.google.com/search?q=
+//console.log(await getOnlineImage("grape, Raw, game"))
