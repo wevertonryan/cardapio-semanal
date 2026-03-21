@@ -1,9 +1,8 @@
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { Uint8ArrayReader, BlobReader, ZipReader, TextWriter } from "@zip.js/zip.js";
-import * as cheerio from "cheerio";
 
-import translations from "./data/translations.js";
-//import foods from "./data/foods.js";
+import translations from "../../data/translations.js";
+//import foods from "../../data/foods.js";
 
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
